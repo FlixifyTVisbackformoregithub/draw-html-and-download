@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Drawing App</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        #canvasContainer {
+            display: flex;
+            flex: 1;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            background-color: #ffffff;
+            cursor: crosshair;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .toolbar {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            right: 0;
+            top: 0;
+            background-color: #fff;
+            padding: 15px;
+            border-left: 2px solid #ccc;
+            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .tool-button {
+            margin-bottom: 10px;
+            padding: 8px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            cursor: pointer;
+        }
+
+        .tool-button:hover {
+            background-color: #0056b3;
+        }
+
+        select,
+        input[type="color"],
+        input[type="number"] {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+
+        #setupContainer {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #startButton {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #startButton:hover {
+            background-color: #218838;
+        }
+
+        .shapes-container {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+        }
+
+        .shape {
+            width: 50px;
+            height: 50px;
+            border: 1px solid transparent;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            transition: transform 0.3s, border 0.3s;
+        }
+
+        .shape:hover {
+            transform: scale(1.05);
+        }
+
+        .circle {
+            background: red;
+        }
+
+        .rectangle {
+            background: blue;
+        }
+
+        .square {
+            background: green;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="setupContainer">
+        <h1>Choose Your Canvas Size</h1>
+        <input type="number" id="canvasSizeX" placeholder="Width (px)" />
+        <input type="number" id="canvasSizeY" placeholder="Height (px)" />
+        <button id="startButton">Go</button>
+    </div>
+
+    <div id="canvasContainer" style="display: none;">
+        <canvas id="drawingCanvas"></canvas>
+        <div class="toolbar">
+            <input type="color" id="colorPicker" value="#000000">
+            <input type="number" id="brushSize" value="5" min="1" max="100" placeholder="Brush Size" />
+            <button id="uploadImage" class="tool-button"><i class="fas fa-upload"></i> Upload Image</button>
+            <button id="penBtn" class="tool-button">Pen</button>
+            <button id="pencilBtn" class="tool-button">Pencil</button>
+            <button id="downloadBtn" class="tool-button"><i class="fas fa-download"></i> Download</button>
+            <button id="undoBtn" class="tool-button"><i class="fas fa-undo"></i> Undo</button>
+            <button id="redoBtn" class="tool-button"><i class="fas fa-redo"></i> Redo</button>
+
+            <div class="shapes-container">
+                <div class="shape circle" draggable="true">O</div>
+                <div class="shape rectangle" draggable="true">▭</div>
+                <div class="shape square" draggable="true">□</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const setupContainer = document.getElementById('setupContainer');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const drawingCanvas = document.getElementById('drawingCanvas');
+        const ctx = drawingCanvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSizeInput = document.getElementById('brushSize');
+        const uploadImageBtn = document.getElementById('uploadImage');
+        const shapeSelector = document.getElementById('shapeSelector');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const penBtn = document.getElementById('penBtn');
+        const pencilBtn = document.getElementById('pencilBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // Variables for drawing state
+        let drawing = false;
+        let brushSize = 5;
+        let color = colorPicker.value;
+        let tool = 'pen';
+        let paths = [];
+        let undonePaths = [];
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            const width = parseInt(document.getElementById('canvasSizeX').value) || 800;
+            const height = parseInt(document.getElementById('canvasSizeY').value) || 600;
+
+            drawingCanvas.width = width;
+            drawingCanvas.height = height;
+            setupContainer.style.display = 'none';
+            canvasContainer.style.display = 'flex';
+            ctx.fillStyle = "#FFFFFF"; // Set initial background
+            ctx.fillRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        });
+
+        drawingCanvas.addEventListener('mousedown', (e) => {
+            drawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+            if (tool === 'pen' || tool === 'pencil') {
+                paths.push({ tool, color, brushSize, path: [{ x: e.offsetX, y: e.offsetY }] });
+            }
+        });
+
+        drawingCanvas.addEventListener('mousemove', (e) => {
+            if (drawing && (tool === 'pen' || tool === 'pencil')) {
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+                paths[paths.length - 1].path.push({ x: e.offsetX, y: e.offsetY }); // Store the path
+            }
+        });
+
+        drawingCanvas.addEventListener('mouseup', () => {
+            drawing = false;
+            ctx.closePath();
+        });
+
+        drawingCanvas.addEventListener('mouseout', () => {
+            drawing = false;
+            ctx.closePath();
+        });
+
+        colorPicker.addEventListener('input', (e) => {
+            color = e.target.value;
+        });
+
+        brushSizeInput.addEventListener('input', (e) => {
+            brushSize = e.target.value;
+        });
+
+        penBtn.addEventListener('click', () => {
+            tool = 'pen';
+            brushSizeInput.value = 5; // Default size for pen
+            brushSize = 5;
+        });
+
+        pencilBtn.addEventListener('click', () => {
+            tool = 'pencil';
+            brushSizeInput.value = 1; // Default size for pencil
+            brushSize = 1;
+        });
+
+        uploadImageBtn.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = readerEvent => {
+                    const img = new Image();
+                    img.onload = () => ctx.drawImage(img, 0, 0, drawingCanvas.width, drawingCanvas.height);
+                    img.src = readerEvent.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+        });
+
+        const shapes = document.querySelectorAll('.shape');
+
+        shapes.forEach(shape => {
+            shape.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('shape', shape.className.split(" ")[1]);
+            });
+        });
+
+        drawingCanvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        drawingCanvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const shapeType = e.dataTransfer.getData('shape');
+            const x = e.offsetX;
+            const y = e.offsetY;
+
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+
+            if (shapeType === 'circle') {
+                ctx.beginPath();
+                ctx.arc(x, y, 25, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (shapeType === 'rectangle') {
+                ctx.fillRect(x - 50, y - 25, 100, 50); // Center the rectangle
+            } else if (shapeType === 'square') {
+                ctx.fillRect(x - 25, y - 25, 50, 50); // Center the square
+            }
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'your_canvas_image.png';
+            link.href = drawingCanvas.toDataURL('image/png');
+            link.click();
+        });
+
+        undoBtn.addEventListener('click', () => {
+            if (paths.length > 0) {
+                const lastPath = paths.pop();
+                undonePaths.push(lastPath);
+                redraw();
+            }
+        });
+
+        redoBtn.addEventListener('click', () => {
+            if (undonePaths.length > 0) {
+                const pathToRedo = undonePaths.pop();
+                paths.push(pathToRedo);
+                redraw();
+            }
+        });
+
+        function redraw() {
+            ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            ctx.fillStyle = "#FFFFFF"; // Keep the canvas background white
+            ctx.fillRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            for (const p of paths) {
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = p.brushSize;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(p.path[0].x, p.path[0].y);
+                for (const point of p.path) {
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.stroke();
+            }
+        }
+    </script>
+</body>
+
+</html>
